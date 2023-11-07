@@ -7,6 +7,9 @@ import torch
 import torch.nn as nn
 from timm.models.layers import DropPath
 from timm.models.registry import register_model
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 device = torch.device('cuda')
 
@@ -272,8 +275,17 @@ else:
     print("No saved model found, starting training from scratch.")
 
 # Training loop
+# Lists to store training accuracy and loss values
+train_accuracy_values = []
+train_loss_values = []
+
+# Training loop
 for epoch in range(num_epochs):
     model.train()
+    total_correct = 0
+    total_samples = 0
+    total_loss = 0
+
     for batch_idx, (samples, targets) in enumerate(dataloader_train):
         samples, targets = samples.to(device), targets.to(device)
         output = model(samples)
@@ -283,11 +295,88 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
 
+        # Calculate training accuracy
+        _, predicted = torch.max(output, 1)
+        total_correct += (predicted == targets).sum().item()
+        total_samples += targets.size(0)
+
+        total_loss += loss.item()
+
         if batch_idx % 100 == 0:
             print(
-                f'Epoch {epoch+1}/{num_epochs}, Batch {batch_idx}, Loss: {loss.item():.4f}')
+                f'Epoch {epoch + 1}/{num_epochs}, Batch {batch_idx}, Loss: {loss.item():.4f}')
+
+    # Calculate training accuracy and loss for the epoch
+    accuracy = 100 * total_correct / total_samples
+    avg_loss = total_loss / len(dataloader_train)
+
+    # Save accuracy and loss values
+    train_accuracy_values.append(accuracy)
+    train_loss_values.append(avg_loss)
 
     # Save the model after each epoch
     model_path = os.path.join(save_dir, f'convnext_epoch_{epoch + 1}.pth')
     torch.save(model.state_dict(), model_path)
     print(f'Model saved at epoch {epoch + 1}: {model_path}')
+
+# Plotting training accuracy
+plt.figure(figsize=(10, 5))
+plt.plot(range(1, num_epochs + 1), train_accuracy_values,
+         marker='o', color='b', label='Training Accuracy')
+plt.title('Training Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy (%)')
+plt.xticks(np.arange(1, num_epochs + 1, 1))
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Plotting training loss
+plt.figure(figsize=(10, 5))
+plt.plot(range(1, num_epochs + 1), train_loss_values,
+         marker='o', color='r', label='Training Loss')
+plt.title('Training Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.xticks(np.arange(1, num_epochs + 1, 1))
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Lists to store validation accuracy, precision, recall, and F1-score values
+val_accuracy_values = []
+precision_values = []
+recall_values = []
+f1_values = []
+
+# Validation loop
+model.eval()
+with torch.no_grad():
+    for batch_idx, (samples, targets) in enumerate(dataloader_val):
+        samples, targets = samples.to(device), targets.to(device)
+        output = model(samples)
+        
+        # Calculate validation accuracy
+        _, predicted = torch.max(output, 1)
+        accuracy = accuracy_score(targets.cpu(), predicted.cpu()) * 100
+        val_accuracy_values.append(accuracy)
+        
+        # Calculate precision, recall, and F1-score
+        precision = precision_score(targets.cpu(), predicted.cpu(), average='weighted') * 100
+        recall = recall_score(targets.cpu(), predicted.cpu(), average='weighted') * 100
+        f1 = f1_score(targets.cpu(), predicted.cpu(), average='weighted') * 100
+        
+        precision_values.append(precision)
+        recall_values.append(recall)
+        f1_values.append(f1)
+
+# Calculate average metrics
+avg_val_accuracy = np.mean(val_accuracy_values)
+avg_precision = np.mean(precision_values)
+avg_recall = np.mean(recall_values)
+avg_f1 = np.mean(f1_values)
+
+print(f'Validation Accuracy: {avg_val_accuracy:.2f}%')
+print(f'Precision: {avg_precision:.2f}%')
+print(f'Recall: {avg_recall:.2f}%')
+print(f'F1-score: {avg_f1:.2f}%')
