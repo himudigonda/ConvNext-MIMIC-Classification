@@ -1,6 +1,16 @@
 # ConvNext-MIMIC-Classification
 This repo holds the implementation of ConvNext deep learning architecture trained on MIMIC Chest X-rays Dataset.
 
+## Todo
+- [x] Complete prerequisite certifications for MIMIC Access.
+- [x] Download and process the dataset.
+- [x] Design the ConvNext Architecture.
+- [x] Build the dataflow pipeline.
+- [x] 3% dataset trail run to ensure proper pipeline design.
+- [ ] Create an sbatch file to submit job to ASU's Sol supercomupter.
+- [ ] Run on ASU's Sol supercomputer to obtain final results.
+- [ ] Visualize Results.
+
 ## Chest X-ray Dataset: MIMIC
 
 ### Abstract
