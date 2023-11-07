@@ -1,3 +1,5 @@
+from timm.models.layers import trunc_normal_, DropPath
+import torch.nn.functional as F
 import os
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
@@ -5,22 +7,20 @@ import torch
 import torch.nn as nn
 from timm.models.layers import DropPath
 from timm.models.registry import register_model
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-# Define the device to be used (GPU if available, else CPU)
 device = torch.device('cuda')
 
-# Paths to the training and evaluation data directories
-data_path = '/scratch/hmudigon/Classification/modified-mimic-cxr-jpg/train/'
-eval_data_path = '/scratch/hmudigon/Classification/modified-mimic-cxr-jpg/val/'
-nb_classes = 14  # Number of classes in the dataset
+data_path = './modified-mimic-cxr-jpg/train/'
+eval_data_path = './modified-mimic-cxr-jpg/val/'
+nb_classes = 14
 
-# Define the image transformations to be applied to the data
 transform = transforms.Compose([
-    transforms.Resize((224, 224)),  # Resize the image to (224, 224)
-    transforms.ToTensor(),  # Convert the image to a PyTorch tensor
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
 ])
-
-# Function to build the dataset for training and evaluation
 
 
 def build_dataset(is_train):
@@ -32,30 +32,17 @@ def build_dataset(is_train):
     return dataset, nb_classes
 
 
-# Create training and evaluation datasets using the build_dataset function
 dataset_train, _ = build_dataset(is_train=True)
 dataset_val, _ = build_dataset(is_train=False)
 
-# Create data loaders for training and evaluation datasets
+
 dataloader_train = DataLoader(
     dataset_train, batch_size=32, shuffle=True, num_workers=4)
 dataloader_val = DataLoader(
     dataset_val, batch_size=32, shuffle=False, num_workers=4)
 
 
-# Definition of the ConvNeXt block
 class Block(nn.Module):
-    r""" ConvNeXt Block. There are two equivalent implementations:
-    (1) DwConv -> LayerNorm (channels_first) -> 1x1 Conv -> GELU -> 1x1 Conv; all in (N, C, H, W)
-    (2) DwConv -> Permute to (N, H, W, C); LayerNorm (channels_last) -> Linear -> GELU -> Linear; Permute back
-    We use (2) as we find it slightly faster in PyTorch
-
-    Args:
-        dim (int): Number of input channels.
-        drop_path (float): Stochastic depth rate. Default: 0.0
-        layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
-    """
-
     def __init__(self, dim, drop_path=0., layer_scale_init_value=1e-6):
         super().__init__()
         self.dwconv = nn.Conv2d(dim, dim, kernel_size=7,
@@ -86,7 +73,6 @@ class Block(nn.Module):
         return x
 
 
-# Definition of the ConvNeXt model
 class ConvNeXt(nn.Module):
     r""" ConvNeXt
         A PyTorch impl of : `A ConvNet for the 2020s`  -
@@ -160,7 +146,6 @@ class ConvNeXt(nn.Module):
         return x
 
 
-# Definition of the LayerNorm module used in the ConvNeXt model
 class LayerNorm(nn.Module):
     r""" LayerNorm that supports two data formats: channels_last (default) or channels_first. 
     The ordering of the dimensions in the inputs. channels_last corresponds to inputs with 
@@ -189,7 +174,6 @@ class LayerNorm(nn.Module):
             return x
 
 
-# Dictionary containing URLs for pre-trained ConvNeXt models
 model_urls = {
     "convnext_tiny_1k": "https://dl.fbaipublicfiles.com/convnext/convnext_tiny_1k_224_ema.pth",
     "convnext_small_1k": "https://dl.fbaipublicfiles.com/convnext/convnext_small_1k_224_ema.pth",
@@ -203,7 +187,6 @@ model_urls = {
 }
 
 
-# Registration of different ConvNeXt model variants using the @register_model decorator
 @register_model
 def convnext_tiny(pretrained=False, in_22k=False, **kwargs):
     model = ConvNeXt(depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], **kwargs)
@@ -266,19 +249,24 @@ def convnext_xlarge(pretrained=False, in_22k=False, **kwargs):
 # Directory to save the models
 save_dir = './model_dumps/'
 os.makedirs(save_dir, exist_ok=True)
+
 # Initialize the model
 model = convnext_tiny(pretrained=False)
 model.to(device)
 model.train()
+
 # Number of epochs
 num_epochs = 2
+
 # Optimizer and Loss function
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 criterion = nn.CrossEntropyLoss()
+
 # Find the most recently saved model file
 list_of_files = os.listdir(save_dir)
 latest_model_file = max(list_of_files, key=os.path.getctime)
 model_path = os.path.join(save_dir, latest_model_file)
+
 # Load the most recently saved model if available
 if os.path.exists(model_path):
     model.load_state_dict(torch.load(model_path))
@@ -287,19 +275,108 @@ else:
     print("No saved model found, starting training from scratch.")
 
 # Training loop
+# Lists to store training accuracy and loss values
+train_accuracy_values = []
+train_loss_values = []
+
+# Training loop
 for epoch in range(num_epochs):
     model.train()
+    total_correct = 0
+    total_samples = 0
+    total_loss = 0
+
     for batch_idx, (samples, targets) in enumerate(dataloader_train):
         samples, targets = samples.to(device), targets.to(device)
         output = model(samples)
         loss = criterion(output, targets)
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
+        # Calculate training accuracy
+        _, predicted = torch.max(output, 1)
+        total_correct += (predicted == targets).sum().item()
+        total_samples += targets.size(0)
+
+        total_loss += loss.item()
+
         if batch_idx % 100 == 0:
             print(
-                f'Epoch {epoch+1}/{num_epochs}, Batch {batch_idx}, Loss: {loss.item():.4f}')
+                f'Epoch {epoch + 1}/{num_epochs}, Batch {batch_idx}, Loss: {loss.item():.4f}')
+
+    # Calculate training accuracy and loss for the epoch
+    accuracy = 100 * total_correct / total_samples
+    avg_loss = total_loss / len(dataloader_train)
+
+    # Save accuracy and loss values
+    train_accuracy_values.append(accuracy)
+    train_loss_values.append(avg_loss)
+
     # Save the model after each epoch
     model_path = os.path.join(save_dir, f'convnext_epoch_{epoch + 1}.pth')
     torch.save(model.state_dict(), model_path)
     print(f'Model saved at epoch {epoch + 1}: {model_path}')
+
+# Plotting training accuracy
+plt.figure(figsize=(10, 5))
+plt.plot(range(1, num_epochs + 1), train_accuracy_values,
+         marker='o', color='b', label='Training Accuracy')
+plt.title('Training Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy (%)')
+plt.xticks(np.arange(1, num_epochs + 1, 1))
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Plotting training loss
+plt.figure(figsize=(10, 5))
+plt.plot(range(1, num_epochs + 1), train_loss_values,
+         marker='o', color='r', label='Training Loss')
+plt.title('Training Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.xticks(np.arange(1, num_epochs + 1, 1))
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Lists to store validation accuracy, precision, recall, and F1-score values
+val_accuracy_values = []
+precision_values = []
+recall_values = []
+f1_values = []
+
+# Validation loop
+model.eval()
+with torch.no_grad():
+    for batch_idx, (samples, targets) in enumerate(dataloader_val):
+        samples, targets = samples.to(device), targets.to(device)
+        output = model(samples)
+        
+        # Calculate validation accuracy
+        _, predicted = torch.max(output, 1)
+        accuracy = accuracy_score(targets.cpu(), predicted.cpu()) * 100
+        val_accuracy_values.append(accuracy)
+        
+        # Calculate precision, recall, and F1-score
+        precision = precision_score(targets.cpu(), predicted.cpu(), average='weighted') * 100
+        recall = recall_score(targets.cpu(), predicted.cpu(), average='weighted') * 100
+        f1 = f1_score(targets.cpu(), predicted.cpu(), average='weighted') * 100
+        
+        precision_values.append(precision)
+        recall_values.append(recall)
+        f1_values.append(f1)
+
+# Calculate average metrics
+avg_val_accuracy = np.mean(val_accuracy_values)
+avg_precision = np.mean(precision_values)
+avg_recall = np.mean(recall_values)
+avg_f1 = np.mean(f1_values)
+
+print(f'Validation Accuracy: {avg_val_accuracy:.2f}%')
+print(f'Precision: {avg_precision:.2f}%')
+print(f'Recall: {avg_recall:.2f}%')
+print(f'F1-score: {avg_f1:.2f}%')
