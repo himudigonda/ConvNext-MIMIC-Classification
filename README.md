@@ -6,7 +6,7 @@ This repo holds the implementation of ConvNext deep learning architecture traine
 - [x] Download and process the dataset.
 - [x] Design the ConvNext Architecture.
 - [x] Build the dataflow pipeline.
-- [x] 3% dataset trail run to ensure proper pipeline design.
+- [x] 3% dataset trail run to ensure proper pipeline design as proof-of-work.
 - [ ] Create an sbatch file to submit job to ASU's Sol supercomupter.
 - [ ] Run on ASU's Sol supercomputer to obtain final results.
 - [ ] Visualize Results.
@@ -47,16 +47,16 @@ ConvNeXt is a state-of-the-art deep learning architecture intended to tackle a r
 ConvNeXt's architecture is meticulously designed to address the challenges associated with recognizing objects of varying scales and complexities within images. Here are the key components of ConvNeXt:
 ![](https://user-images.githubusercontent.com/8370623/180626875-fe958128-6102-4f01-9ca4-e3a30c3148f9.png)
 ![](./img1.png)
-## Multi-Scale Feature Aggregation
+### Multi-Scale Feature Aggregation
 ConvNeXt employs a sophisticated technique for aggregating multi-scale features. It processes input images at multiple resolutions, allowing the model to capture fine-grained details as well as high-level context. This multi-scale approach enhances ConvNeXt's capability to recognize intricate patterns and objects of different sizes within a single image.
 
-## Aggregated Transformative Units (ATUs)
+### Aggregated Transformative Units (ATUs)
 ATUs serve as the fundamental building blocks of ConvNeXt's architecture. These units are responsible for dynamic feature transformations, enabling the model to learn complex patterns and representations from the input data. Within ATUs, ConvNeXt performs a series of adaptive transformations, allowing the network to focus on relevant features while discarding irrelevant information. This adaptability is crucial for handling diverse datasets with varying levels of complexity.
 
-## Adaptive Cardinality
+### Adaptive Cardinality
 One of ConvNeXt's innovative features is its adaptive cardinality. Traditional convolutional networks rely on a fixed number of pathways within each layer, limiting their flexibility to adapt to different data complexities. ConvNeXt, however, dynamically adjusts the cardinality (the number of paths) within ATUs based on the input data. This adaptability ensures that the network can allocate resources effectively, dedicating more paths to complex features and fewer paths to simpler patterns. By doing so, ConvNeXt optimizes parameter usage, leading to improved accuracy and efficiency.
 
-## Enhanced Connectivity Patterns
+### Enhanced Connectivity Patterns
 ConvNeXt incorporates enhanced connectivity patterns between ATUs to optimize information flow within the network. Strategic connections are established to capture both spatial and contextual information effectively. These connections enable the network to understand the relationships between features across different spatial locations, allowing ConvNeXt to recognize objects in their proper contexts. By leveraging these enhanced connectivity patterns, ConvNeXt excels at tasks that require a deep understanding of spatial relationships and object interactions within images.
 
 
